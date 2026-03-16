@@ -15,17 +15,41 @@
     <artifactId>shipment-tracker</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>APP1 Shipment Tracker</name>
-    <description>Simple shipment tracker with world map view</description>
+    <description>Shipment tracker with SAP integration and B2G SOAP customs clearance</description>
 
     <properties>
         <java.version>17</java.version>
     </properties>
 
     <dependencies>
+        <!-- Spring Boot Web (REST API + static resources) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!--
+            Spring-WS Core: SOAP web service framework.
+            Used for the B2G customs clearance SOAP endpoint.
+            WSDL auto-generated from XSD and served at /ws/customs.wsdl
+        -->
+        <dependency>
+            <groupId>org.springframework.ws</groupId>
+            <artifactId>spring-ws-core</artifactId>
+            <version>4.0.10</version>
+        </dependency>
+
+        <!--
+            WSDL4J: Required by Spring-WS for DefaultWsdl11Definition
+            (auto WSDL generation from XSD schema).
+        -->
+        <dependency>
+            <groupId>wsdl4j</groupId>
+            <artifactId>wsdl4j</artifactId>
+            <version>1.6.3</version>
+        </dependency>
+
+        <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
