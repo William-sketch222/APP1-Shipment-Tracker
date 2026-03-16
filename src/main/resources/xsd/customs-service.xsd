@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  B2G Customs Clearance Service — XSD Schema
+  Namespace : http://app1.com/customs
+  Purpose   : Defines the SOAP request/response types for customs status queries.
+  Real-world: Conforms to WCO (World Customs Organization) data model patterns
+              used in EU ICS2, US CBP ACE, and UN/CEFACT standards.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:tns="http://app1.com/customs"
+           targetNamespace="http://app1.com/customs"
+           elementFormDefault="qualified">
+
+    <!-- REQUEST: Submit a customs declaration for a shipment -->
+    <xs:element name="GetCustomsStatusRequest">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="shipmentId"         type="xs:string"/>
+                <xs:element name="hsCode"             type="xs:string"/>  <!-- Harmonized System tariff code -->
+                <xs:element name="declaredValue"      type="xs:decimal"/> <!-- Customs value in nominated currency -->
+                <xs:element name="currency"           type="xs:string"/>  <!-- ISO 4217 currency code -->
+                <xs:element name="originCountry"      type="xs:string"/>  <!-- ISO 3166-1 alpha-2 -->
+                <xs:element name="destinationCountry" type="xs:string"/>  <!-- ISO 3166-1 alpha-2 -->
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- RESPONSE: Government customs authority decision -->
+    <xs:element name="GetCustomsStatusResponse">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="declarationNumber"      type="xs:string"/>              <!-- Unique customs reference -->
+                <xs:element name="clearanceStatus"        type="tns:ClearanceStatusType"/> <!-- Enum value -->
+                <xs:element name="dutyRate"               type="xs:decimal"/>             <!-- % rate applied -->
+                <xs:element name="dutyAmount"             type="xs:decimal"/>             <!-- Amount payable -->
+                <xs:element name="estimatedClearanceDate" type="xs:string"/>              <!-- ISO date -->
+                <xs:element name="remarks"                type="xs:string"/>              <!-- Authority comments -->
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ENUM: Valid clearance status values -->
+    <xs:simpleType name="ClearanceStatusType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="PENDING"/>   <!-- Under documentary review -->
+            <xs:enumeration value="APPROVED"/>  <!-- Cleared for import/export -->
+            <xs:enumeration value="HELD"/>      <!-- Physical inspection required -->
+            <xs:enumeration value="REJECTED"/>  <!-- Declaration refused -->
+        </xs:restriction>
+    </xs:simpleType>
+
+</xs:schema>
