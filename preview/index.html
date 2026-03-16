@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>APP1 — Shipment Tracker + SAP/B2G</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+    header{background:#1a1d2e;padding:12px 20px;border-bottom:2px solid #2d3154;flex-shrink:0}
+    .header-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+    header h1{font-size:1.2rem;color:#7eb3ff;font-weight:600}
+    .header-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .badge{font-size:.7rem;padding:3px 8px;border-radius:10px;font-weight:600;letter-spacing:.04em}
+    .badge-sap{background:#1a2e1a;color:#5dba8a;border:1px solid #2d5a2d}
+    .badge-soap{background:#1a1a3a;color:#aac4ff;border:1px solid #2d3580}
+    .legend{display:flex;gap:14px;font-size:.8rem;color:#aaa;align-items:center}
+    .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:3px}
+    .dot.in-transit{background:#4a90d9}.dot.delivered{background:#4caf7d}.dot.processing{background:#f0a500}
+    .app-container{display:flex;flex:1;overflow:hidden}
+    #sidebar{width:300px;background:#13151f;border-right:1px solid #2d3154;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+    #sidebar h2{padding:12px 14px 8px;font-size:.9rem;color:#7eb3ff;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #2d3154}
+    #shipment-count{background:#2d3154;color:#aac4ff;padding:1px 7px;border-radius:10px;font-size:.72rem;margin-left:5px}
+    #filter-bar{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid #1f2235;flex-wrap:wrap}
+    .filter-btn{background:#1e2133;border:1px solid #3a3f60;color:#aaa;padding:3px 9px;border-radius:10px;font-size:.72rem;cursor:pointer;transition:all .2s}
+    .filter-btn:hover,.filter-btn.active{background:#2d3a6e;color:#fff;border-color:#4a6fd4}
+    #shipment-list{list-style:none;overflow-y:auto;flex:1}
+    .shipment-item{padding:10px 14px;border-bottom:1px solid #1c1f30;cursor:pointer;transition:background .15s}
+    .shipment-item:hover{background:#1a1f35}
+    .shipment-item.selected{background:#1e2d55;border-left:3px solid #4a90d9}
+    .s-id{font-size:.68rem;color:#555;margin-bottom:2px}
+    .s-route{font-size:.85rem;font-weight:600;color:#d0d8f0;margin-bottom:3px}
+    .s-desc{font-size:.73rem;color:#777;margin-bottom:5px}
+    .s-footer{display:flex;justify-content:space-between;align-items:center}
+    .status-badge{font-size:.66rem;padding:2px 7px;border-radius:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .status-IN_TRANSIT{background:#1a3a5c;color:#7eb3ff}
+    .status-DELIVERED{background:#1a3a2a;color:#5dba8a}
+    .status-PROCESSING{background:#3a2e10;color:#f0c060}
+    .eta{font-size:.7rem;color:#555}
+    main{flex:1;position:relative;overflow:hidden}
+    #map{width:100%;height:100%}
+    /* ── DETAIL DRAWER ──────────────────────────────────────────────── */
+    #detail-drawer{position:absolute;top:0;right:-440px;width:420px;height:100%;background:#12141e;border-left:1px solid #2d3154;z-index:1000;transition:right .3s ease;display:flex;flex-direction:column;overflow:hidden}
+    #detail-drawer.open{right:0}
+    .drawer-header{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px 10px;border-bottom:1px solid #2d3154;flex-shrink:0}
+    .drawer-tracking{font-size:.75rem;color:#7eb3ff;font-weight:700;letter-spacing:.06em;margin-bottom:3px}
+    .drawer-route{font-size:.9rem;font-weight:600;color:#d0d8f0;margin-bottom:4px}
+    .drawer-meta{display:flex;gap:8px;align-items:center}
+    .drawer-close{background:none;border:1px solid #3a3f60;color:#888;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:.85rem;flex-shrink:0;transition:all .2s}
+    .drawer-close:hover{border-color:#7eb3ff;color:#7eb3ff}
+    .drawer-body{flex:1;overflow-y:auto;padding:0 0 20px}
+    .drawer-section{padding:14px 16px 0}
+    .section-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:#7eb3ff;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .section-divider{height:1px;background:#1e2235;margin:14px 16px 0}
+    /* SAP Grid */
+    .sap-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .sap-cell{background:#1a1d2e;border-radius:6px;padding:8px 10px}
+    .sap-label{font-size:.67rem;color:#556;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+    .sap-value{font-size:.82rem;color:#c8d4f0;font-weight:500}
+    .sap-value.mono{font-family:monospace;color:#aac4ff}
+    .sap-sync{font-size:.68rem;color:#445;margin-top:8px;text-align:right}
+    .sap-cell.wide{grid-column:span 2}
+    /* Customs section */
+    .customs-btn{width:100%;padding:10px 14px;background:#1e2a50;color:#7eb3ff;border:1px solid #3a5080;border-radius:8px;font-size:.82rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+    .customs-btn:hover{background:#253560;border-color:#5a80c0}
+    .customs-btn:disabled{opacity:.5;cursor:not-allowed}
+    .customs-loading{text-align:center;padding:16px;color:#557}
+    .spinner{display:inline-block;width:18px;height:18px;border:2px solid #2d3154;border-top-color:#7eb3ff;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .customs-result{margin-top:10px}
+    .customs-status-card{padding:12px 14px;border-radius:8px;margin-bottom:8px}
+    .cs-APPROVED{background:#0d2218;border:1px solid #2d5a3a;color:#5dba8a}
+    .cs-PENDING{background:#1a1e0e;border:1px solid #4a4a1a;color:#c8c040}
+    .cs-HELD{background:#2a1010;border:1px solid #5a2020;color:#e07070}
+    .cs-REJECTED{background:#2a0808;border:1px solid #6a1010;color:#e05050}
+    .cs-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;opacity:.7;margin-bottom:2px}
+    .cs-status{font-size:1rem;font-weight:700;margin-bottom:6px}
+    .cs-detail{font-size:.75rem;opacity:.85}
+    .customs-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+    .customs-cell{background:#1a1d2e;border-radius:6px;padding:8px 10px}
+    .customs-remarks{background:#1a1d2e;border-radius:6px;padding:10px;font-size:.75rem;color:#aaa;line-height:1.5}
+    /* SOAP toggle */
+    .soap-toggle{font-size:.72rem;color:#7eb3ff;cursor:pointer;padding:6px 0;display:flex;align-items:center;gap:5px;user-select:none}
+    .soap-toggle:hover{color:#aac4ff}
+    .soap-block{display:none;background:#080a12;border:1px solid #1e2235;border-radius:6px;padding:10px;font-size:.68rem;font-family:'Courier New',monospace;line-height:1.6;overflow-x:auto;max-height:220px;overflow-y:auto;margin-top:4px}
+    .soap-block.visible{display:block}
+    .xml-tag{color:#4a90d9}.xml-ns{color:#6688aa}.xml-val{color:#f0c080}.xml-comment{color:#446655;font-style:italic}
+    /* Leaflet popups */
+    .leaflet-popup-content-wrapper{background:#1a1d2e;color:#e0e0e0;border:1px solid #2d3154;border-radius:8px}
+    .leaflet-popup-tip{background:#1a1d2e}
+    .pu-title{font-size:.88rem;font-weight:700;color:#7eb3ff;margin-bottom:5px}
+    .pu-row{font-size:.76rem;margin-bottom:2px;color:#ccc}
+    .pu-row span{color:#666;margin-right:4px}
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h1>&#128666; Global Shipment Tracker</h1>
+      <div class="header-badges">
+        <span class="badge badge-sap">&#128994; SAP S/4HANA</span>
+        <span class="badge badge-soap">&#128274; B2G SOAP</span>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="dot in-transit"></span>In Transit
+      <span class="dot delivered"></span>Delivered
+      <span class="dot processing"></span>Processing
+    </div>
+  </div>
+</header>
+
+<div class="app-container">
+  <aside id="sidebar">
+    <h2>Shipments <span id="shipment-count"></span></h2>
+    <div id="filter-bar">
+      <button class="filter-btn active" data-status="ALL">All</button>
+      <button class="filter-btn" data-status="IN_TRANSIT">In Transit</button>
+      <button class="filter-btn" data-status="DELIVERED">Delivered</button>
+      <button class="filter-btn" data-status="PROCESSING">Processing</button>
+    </div>
+    <ul id="shipment-list"></ul>
+  </aside>
+
+  <main>
+    <div id="map"></div>
+
+    <!-- SAP + B2G Detail Drawer (slides over map) -->
+    <div id="detail-drawer">
+      <div class="drawer-header">
+        <div>
+          <div class="drawer-tracking" id="d-tracking"></div>
+          <div class="drawer-route" id="d-route"></div>
+          <div class="drawer-meta">
+            <span class="status-badge" id="d-status-badge"></span>
+            <span style="font-size:.72rem;color:#556" id="d-eta"></span>
+          </div>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()">&#x2715;</button>
+      </div>
+
+      <div class="drawer-body">
+        <!-- SAP Section -->
+        <div class="drawer-section">
+          <div class="section-title">&#128230; SAP Transport Data</div>
+          <div class="sap-grid" id="sap-grid"></div>
+          <div class="sap-sync" id="sap-sync"></div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- B2G Customs Section -->
+        <div class="drawer-section" style="padding-top:14px">
+          <div class="section-title">&#128274; B2G Customs Clearance</div>
+          <button class="customs-btn" id="customs-btn" onclick="triggerCustomsCheck()">
+            &#128196; Request Customs Status via SOAP
+          </button>
+          <div id="customs-loading" style="display:none" class="customs-loading">
+            <span class="spinner"></span>Querying customs authority...
+          </div>
+          <div id="customs-result" style="display:none" class="customs-result"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ────────────────────────────────────────────────────────────────────────
+// DUMMY DATA (mirrors Spring Boot services)
+// ────────────────────────────────────────────────────────────────────────
+const SHIPMENTS = [
+  {id:"SHP001",trackingNumber:"TRK-2026-001",origin:"Shanghai, China",destination:"Los Angeles, USA",originLat:31.2304,originLng:121.4737,destLat:34.0522,destLng:-118.2437,status:"IN_TRANSIT",carrier:"Ocean Freight Co.",estimatedDelivery:"2026-03-25",description:"Electronics — 20ft Container"},
+  {id:"SHP002",trackingNumber:"TRK-2026-002",origin:"New York, USA",destination:"London, UK",originLat:40.7128,originLng:-74.006,destLat:51.5074,destLng:-0.1278,status:"DELIVERED",carrier:"Atlantic Express",estimatedDelivery:"2026-03-10",description:"Pharmaceuticals — Air Freight"},
+  {id:"SHP003",trackingNumber:"TRK-2026-003",origin:"Dubai, UAE",destination:"Singapore",originLat:25.2048,originLng:55.2708,destLat:1.3521,destLng:103.8198,status:"IN_TRANSIT",carrier:"Gulf Cargo",estimatedDelivery:"2026-03-20",description:"Luxury Goods — Air Freight"},
+  {id:"SHP004",trackingNumber:"TRK-2026-004",origin:"Sydney, Australia",destination:"Tokyo, Japan",originLat:-33.8688,originLng:151.2093,destLat:35.6762,destLng:139.6503,status:"PROCESSING",carrier:"Pacific Lines",estimatedDelivery:"2026-03-28",description:"Raw Materials — Bulk Carrier"},
+  {id:"SHP005",trackingNumber:"TRK-2026-005",origin:"Frankfurt, Germany",destination:"Chicago, USA",originLat:50.1109,originLng:8.6821,destLat:41.8781,destLng:-87.6298,status:"IN_TRANSIT",carrier:"Euro Air Cargo",estimatedDelivery:"2026-03-18",description:"Auto Parts — Air Freight"},
+  {id:"SHP006",trackingNumber:"TRK-2026-006",origin:"Mumbai, India",destination:"Rotterdam, Netherlands",originLat:19.076,originLng:72.8777,destLat:51.9244,destLng:4.4777,status:"DELIVERED",carrier:"India Ocean Shipping",estimatedDelivery:"2026-03-08",description:"Textiles — 40ft Container"},
+  {id:"SHP007",trackingNumber:"TRK-2026-007",origin:"São Paulo, Brazil",destination:"Miami, USA",originLat:-23.5505,originLng:-46.6333,destLat:25.7617,destLng:-80.1918,status:"IN_TRANSIT",carrier:"South American Lines",estimatedDelivery:"2026-03-22",description:"Coffee & Commodities"},
+  {id:"SHP008",trackingNumber:"TRK-2026-008",origin:"Toronto, Canada",destination:"Mexico City, Mexico",originLat:43.6532,originLng:-79.3832,destLat:19.4326,destLng:-99.1332,status:"PROCESSING",carrier:"North America Freight",estimatedDelivery:"2026-03-30",description:"Industrial Machinery"},
+  {id:"SHP009",trackingNumber:"TRK-2026-009",origin:"Cape Town, South Africa",destination:"Amsterdam, Netherlands",originLat:-33.9249,originLng:18.4241,destLat:52.3676,destLng:4.9041,status:"IN_TRANSIT",carrier:"African Shipping Co.",estimatedDelivery:"2026-04-02",description:"Diamonds & Minerals"},
+  {id:"SHP010",trackingNumber:"TRK-2026-010",origin:"Seoul, South Korea",destination:"Seattle, USA",originLat:37.5665,originLng:126.978,destLat:47.6062,destLng:-122.3321,status:"DELIVERED",carrier:"Pacific Star Cargo",estimatedDelivery:"2026-03-14",description:"Consumer Electronics"}
+];
+
+// SAP S/4HANA Transportation Management data (mirrors SapService.java)
+const SAP_DATA = {
+  SHP001:{sapTo:"0010000001",carrier:"OCEAN-FRGHT-CO",incoterms:"FOB",incotermLoc:"Shanghai Port",hsCode:"8471.30.0000",hsDesc:"Portable automatic data processing machines",coo:"CN",grossKg:18500,netKg:17200,volM3:32.5,freightUSD:4800,customsUSD:215000,pkgs:850,pkgType:"Cartons",sync:"2026-03-15"},
+  SHP002:{sapTo:"0010000002",carrier:"ATLA-EXPRESS",incoterms:"CIF",incotermLoc:"London Heathrow",hsCode:"3004.90.9999",hsDesc:"Medicaments — mixed or unmixed products",coo:"US",grossKg:850,netKg:820,volM3:4.2,freightUSD:12400,customsUSD:89000,pkgs:120,pkgType:"Boxes",sync:"2026-03-10"},
+  SHP003:{sapTo:"0010000003",carrier:"GULF-CARGO",incoterms:"DDP",incotermLoc:"Singapore Changi",hsCode:"7113.19.2100",hsDesc:"Jewellery of precious metal",coo:"AE",grossKg:125,netKg:118,volM3:0.8,freightUSD:8200,customsUSD:450000,pkgs:24,pkgType:"Cases",sync:"2026-03-14"},
+  SHP004:{sapTo:"0010000004",carrier:"PACIF-LINES",incoterms:"FOB",incotermLoc:"Port Botany Sydney",hsCode:"7204.10.0000",hsDesc:"Waste and scrap of cast iron",coo:"AU",grossKg:45000,netKg:44800,volM3:38,freightUSD:6100,customsUSD:32000,pkgs:1,pkgType:"Bulk",sync:"2026-03-16"},
+  SHP005:{sapTo:"0010000005",carrier:"EURO-AIR-CGO",incoterms:"DAP",incotermLoc:"Chicago O'Hare",hsCode:"8708.29.5060",hsDesc:"Parts and accessories for motor vehicles",coo:"DE",grossKg:3200,netKg:3050,volM3:12.8,freightUSD:9800,customsUSD:78000,pkgs:215,pkgType:"Pallets",sync:"2026-03-15"},
+  SHP006:{sapTo:"0010000006",carrier:"IND-OCN-SHIP",incoterms:"CFR",incotermLoc:"Port of Rotterdam",hsCode:"5208.11.0010",hsDesc:"Plain woven cotton fabrics",coo:"IN",grossKg:12400,netKg:12100,volM3:45,freightUSD:3200,customsUSD:28000,pkgs:480,pkgType:"Bales",sync:"2026-03-08"},
+  SHP007:{sapTo:"0010000007",carrier:"SAMR-LINES",incoterms:"FOB",incotermLoc:"Port of Santos",hsCode:"0901.11.0000",hsDesc:"Coffee — not roasted, not decaffeinated",coo:"BR",grossKg:22000,netKg:21500,volM3:28.5,freightUSD:5400,customsUSD:42000,pkgs:900,pkgType:"Bags",sync:"2026-03-13"},
+  SHP008:{sapTo:"0010000008",carrier:"NAMR-FREIGHT",incoterms:"FCA",incotermLoc:"Toronto Pearson",hsCode:"8425.39.0100",hsDesc:"Jacks and hoists — industrial",coo:"CA",grossKg:8500,netKg:8200,volM3:18,freightUSD:7800,customsUSD:185000,pkgs:42,pkgType:"Crates",sync:"2026-03-16"},
+  SHP009:{sapTo:"0010000009",carrier:"AFR-SHIP-CO",incoterms:"CIF",incotermLoc:"Amsterdam Schiphol",hsCode:"7102.31.0000",hsDesc:"Diamonds — non-industrial, unworked",coo:"ZA",grossKg:12,netKg:12,volM3:0.02,freightUSD:18500,customsUSD:890000,pkgs:3,pkgType:"Sealed Cases",sync:"2026-03-12"},
+  SHP010:{sapTo:"0010000010",carrier:"PAC-STAR-CGO",incoterms:"DAP",incotermLoc:"Seattle Tacoma",hsCode:"8525.80.3000",hsDesc:"Television cameras and digital cameras",coo:"KR",grossKg:9800,netKg:9400,volM3:22.5,freightUSD:11200,customsUSD:320000,pkgs:620,pkgType:"Cartons",sync:"2026-03-14"}
+};
+
+// B2G Customs decisions (mirrors CustomsService.java)
+const CUSTOMS_DATA = {
+  SHP001:{declNo:"CUST-2026-0001",status:"PENDING",  dutyRate:3.7, dutyAmt:7955,  clearDate:"2026-03-22",remarks:"Standard documentary review — est. 5–7 business days"},
+  SHP002:{declNo:"CUST-2026-0002",status:"APPROVED", dutyRate:0.0, dutyAmt:0,     clearDate:"2026-03-10",remarks:"Cleared — Medicaments exempt under EU–USA mutual recognition agreement"},
+  SHP003:{declNo:"CUST-2026-0003",status:"PENDING",  dutyRate:8.5, dutyAmt:38250, clearDate:"2026-03-24",remarks:"Pending Kimberley Process certificate validation for precious stones"},
+  SHP004:{declNo:"CUST-2026-0004",status:"HELD",     dutyRate:0.0, dutyAmt:0,     clearDate:"2026-04-05",remarks:"HELD — Mandatory quarantine & biosecurity inspection for bulk raw material"},
+  SHP005:{declNo:"CUST-2026-0005",status:"PENDING",  dutyRate:2.5, dutyAmt:1950,  clearDate:"2026-03-19",remarks:"Standard clearance — auto parts under USMCA tariff classification review"},
+  SHP006:{declNo:"CUST-2026-0006",status:"APPROVED", dutyRate:12.0,dutyAmt:3360,  clearDate:"2026-03-08",remarks:"Cleared — Standard textile duty rate applied, no MFN preference claimed"},
+  SHP007:{declNo:"CUST-2026-0007",status:"PENDING",  dutyRate:0.0, dutyAmt:0,     clearDate:"2026-03-25",remarks:"Agricultural commodity — USDA phytosanitary certificate inspection pending"},
+  SHP008:{declNo:"CUST-2026-0008",status:"PENDING",  dutyRate:0.0, dutyAmt:0,     clearDate:"2026-04-02",remarks:"CUSMA/USMCA duty-free preference claimed — certificate of origin under review"},
+  SHP009:{declNo:"CUST-2026-0009",status:"PENDING",  dutyRate:0.0, dutyAmt:0,     clearDate:"2026-04-05",remarks:"High-value goods — Enhanced KYC and AML verification in progress"},
+  SHP010:{declNo:"CUST-2026-0010",status:"APPROVED", dutyRate:0.0, dutyAmt:0,     clearDate:"2026-03-14",remarks:"Cleared — Korea–USA FTA zero duty rate applied successfully"}
+};
+
+// ────────────────────────────────────────────────────────────────────────
+const STATUS_COLORS={IN_TRANSIT:'#4a90d9',DELIVERED:'#4caf7d',PROCESSING:'#f0a500'};
+const STATUS_LABELS={IN_TRANSIT:'In Transit',DELIVERED:'Delivered',PROCESSING:'Processing'};
+
+let map, allShipments=SHIPMENTS, shipmentLayers={}, selectedId=null, currentShipment=null;
+
+function initMap(){
+  map=L.map('map',{center:[20,10],zoom:2,minZoom:2,maxZoom:10});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19
+  }).addTo(map);
+}
+
+function mkMarker(lat,lng,color,small){
+  const s=small?11:13;
+  return L.marker([lat,lng],{icon:L.divIcon({
+    className:'',
+    html:`<div style="width:${s}px;height:${s}px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 5px ${color}88"></div>`,
+    iconSize:[s,s],iconAnchor:[s/2,s/2]
+  })});
+}
+
+function drawShipment(s){
+  const c=STATUS_COLORS[s.status]||'#888';
+  const om=mkMarker(s.originLat,s.originLng,c,true);
+  const dm=mkMarker(s.destLat,s.destLng,c,false);
+  const line=L.polyline([[s.originLat,s.originLng],[s.destLat,s.destLng]],{color:c,weight:2,opacity:.65,dashArray:'6,4'});
+  const pu=`<div class="pu-title">${s.trackingNumber}</div>
+    <div class="pu-row"><span>From:</span>${s.origin}</div>
+    <div class="pu-row"><span>To:</span>${s.destination}</div>
+    <div class="pu-row"><span>Status:</span>${STATUS_LABELS[s.status]}</div>
+    <div class="pu-row"><span>Cargo:</span>${s.description}</div>`;
+  om.bindPopup(pu); dm.bindPopup(pu);
+  om.addTo(map); dm.addTo(map); line.addTo(map);
+  shipmentLayers[s.id]={om,dm,line};
+}
+
+function removeShipment(id){
+  const l=shipmentLayers[id];if(!l)return;
+  map.removeLayer(l.om);map.removeLayer(l.dm);map.removeLayer(l.line);
+  delete shipmentLayers[id];
+}
+
+function highlightShipment(id){
+  if(selectedId&&shipmentLayers[selectedId]){
+    shipmentLayers[selectedId].line.setStyle({weight:2,opacity:.65});
+    document.querySelectorAll('.shipment-item').forEach(e=>e.classList.remove('selected'));
+  }
+  selectedId=id;
+  const s=allShipments.find(x=>x.id===id);if(!s||!shipmentLayers[id])return;
+  shipmentLayers[id].line.setStyle({weight:4,opacity:1});
+  map.fitBounds([[s.originLat,s.originLng],[s.destLat,s.destLng]],{padding:[60,80]});
+  const el=document.querySelector(`.shipment-item[data-id="${id}"]`);
+  if(el)el.classList.add('selected');
+  // open the detail drawer
+  currentShipment=s;
+  openDrawer(s);
+}
+
+// ── DRAWER ──────────────────────────────────────────────────────────────────────
+
+function openDrawer(s){
+  const sap=SAP_DATA[s.id]||{};
+  // Header
+  document.getElementById('d-tracking').textContent=s.trackingNumber;
+  document.getElementById('d-route').textContent=`${s.origin} → ${s.destination}`;
+  const sb=document.getElementById('d-status-badge');
+  sb.textContent=STATUS_LABELS[s.status]; sb.className=`status-badge status-${s.status}`;
+  document.getElementById('d-eta').textContent=`ETA: ${s.estimatedDelivery}`;
+  // SAP grid
+  document.getElementById('sap-grid').innerHTML=`
+    <div class="sap-cell"><div class="sap-label">SAP Transport Order</div><div class="sap-value mono">${sap.sapTo||'—'}</div></div>
+    <div class="sap-cell"><div class="sap-label">Carrier Code</div><div class="sap-value mono">${sap.carrier||'—'}</div></div>
+    <div class="sap-cell"><div class="sap-label">Incoterms</div><div class="sap-value">${sap.incoterms||'—'} — ${sap.incotermLoc||''}</div></div>
+    <div class="sap-cell"><div class="sap-label">Country of Origin</div><div class="sap-value">${sap.coo||'—'}</div></div>
+    <div class="sap-cell wide"><div class="sap-label">HS Code</div><div class="sap-value mono">${sap.hsCode||'—'} &nbsp;<span style="color:#667;font-size:.72rem">${sap.hsDesc||''}</span></div></div>
+    <div class="sap-cell"><div class="sap-label">Gross Weight</div><div class="sap-value">${(sap.grossKg||0).toLocaleString()} kg</div></div>
+    <div class="sap-cell"><div class="sap-label">Net Weight</div><div class="sap-value">${(sap.netKg||0).toLocaleString()} kg</div></div>
+    <div class="sap-cell"><div class="sap-label">Volume</div><div class="sap-value">${sap.volM3||0} m³</div></div>
+    <div class="sap-cell"><div class="sap-label">Packages</div><div class="sap-value">${(sap.pkgs||0).toLocaleString()} ${sap.pkgType||''}</div></div>
+    <div class="sap-cell"><div class="sap-label">Freight Cost</div><div class="sap-value">$${(sap.freightUSD||0).toLocaleString()}</div></div>
+    <div class="sap-cell"><div class="sap-label">Customs Value</div><div class="sap-value">$${(sap.customsUSD||0).toLocaleString()}</div></div>
+  `;
+  document.getElementById('sap-sync').textContent=`Last SAP sync: ${sap.sync||'unknown'}`;
+  // Reset customs section
+  document.getElementById('customs-btn').disabled=false;
+  document.getElementById('customs-btn').textContent='\u{1F4C4} Request Customs Status via SOAP';
+  document.getElementById('customs-loading').style.display='none';
+  document.getElementById('customs-result').style.display='none';
+  document.getElementById('customs-result').innerHTML='';
+  // Open
+  document.getElementById('detail-drawer').classList.add('open');
+}
+
+function closeDrawer(){
+  document.getElementById('detail-drawer').classList.remove('open');
+}
+
+// ── CUSTOMS SOAP SIMULATION ───────────────────────────────────────────────────
+function triggerCustomsCheck(){
+  if(!currentShipment)return;
+  const btn=document.getElementById('customs-btn');
+  const loading=document.getElementById('customs-loading');
+  const result=document.getElementById('customs-result');
+  btn.disabled=true;
+  btn.textContent='Sending SOAP request...';
+  loading.style.display='block';
+  result.style.display='none';
+  // Simulate network delay (1.8s)
+  setTimeout(()=>{
+    loading.style.display='none';
+    renderCustomsResult(currentShipment);
+    result.style.display='block';
+  },1800);
+}
+
+function renderCustomsResult(s){
+  const d=CUSTOMS_DATA[s.id]||{};
+  const sap=SAP_DATA[s.id]||{};
+  const statusIcons={APPROVED:'\u2705',PENDING:'\u23f3',HELD:'\u26a0\ufe0f',REJECTED:'\u274c'};
+  const icon=statusIcons[d.status]||'\u2753';
+  const el=document.getElementById('customs-result');
+  el.innerHTML=`
+    <div class="customs-status-card cs-${d.status}">
+      <div class="cs-label">Clearance Decision</div>
+      <div class="cs-status">${icon} ${d.status}</div>
+      <div class="cs-detail">${d.declNo}</div>
+    </div>
+    <div class="customs-grid">
+      <div class="customs-cell"><div class="sap-label">Duty Rate</div><div class="sap-value">${d.dutyRate}%</div></div>
+      <div class="customs-cell"><div class="sap-label">Duty Amount</div><div class="sap-value">${d.dutyAmt>0?'$'+d.dutyAmt.toLocaleString():'Exempt'}</div></div>
+      <div class="customs-cell"><div class="sap-label">Est. Clearance</div><div class="sap-value">${d.clearDate}</div></div>
+      <div class="customs-cell"><div class="sap-label">HS Code</div><div class="sap-value mono" style="font-size:.75rem">${sap.hsCode||'—'}</div></div>
+    </div>
+    <div class="customs-remarks">${d.remarks}</div>
+    <div class="soap-toggle" onclick="this.nextElementSibling.classList.toggle('visible');this.textContent=this.textContent.includes('View')?'\u25b2 Hide SOAP messages':'\u25bc View SOAP messages'">
+      &#9660; View SOAP messages
+    </div>
+    <div class="soap-block">${buildSoapXml(s,sap,d)}</div>
+  `;
+}
+
+function x(tag,val,ns='cust'){
+  return `<span class="xml-tag">&lt;${ns}:${tag}&gt;</span><span class="xml-val">${val}</span><span class="xml-tag">&lt;/${ns}:${tag}&gt;</span>`;
+}
+function buildSoapXml(s,sap,d){
+  const req=`<span class="xml-comment">&lt;!-- SOAP REQUEST sent to POST /ws --&gt;</span>
+<span class="xml-tag">&lt;soapenv:Envelope</span> <span class="xml-ns">xmlns:soapenv</span>=<span class="xml-val">"http://schemas.xmlsoap.org/soap/envelope/"</span>
+               <span class="xml-ns">xmlns:cust</span>=<span class="xml-val">"http://app1.com/customs"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;soapenv:Header/&gt;</span>
+  <span class="xml-tag">&lt;soapenv:Body&gt;</span>
+    <span class="xml-tag">&lt;cust:GetCustomsStatusRequest&gt;</span>
+      ${x('shipmentId',s.id)}
+      ${x('hsCode',sap.hsCode||'')}
+      ${x('declaredValue',(sap.customsUSD||0).toFixed(2))}
+      ${x('currency','USD')}
+      ${x('originCountry',sap.coo||'')}
+      ${x('destinationCountry','DEST')}
+    <span class="xml-tag">&lt;/cust:GetCustomsStatusRequest&gt;</span>
+  <span class="xml-tag">&lt;/soapenv:Body&gt;</span>
+<span class="xml-tag">&lt;/soapenv:Envelope&gt;</span>`;
+  const res=`
+<span class="xml-comment">&lt;!-- SOAP RESPONSE from customs authority --&gt;</span>
+<span class="xml-tag">&lt;soapenv:Envelope</span> <span class="xml-ns">xmlns:soapenv</span>=<span class="xml-val">"http://schemas.xmlsoap.org/soap/envelope/"</span>
+               <span class="xml-ns">xmlns:cust</span>=<span class="xml-val">"http://app1.com/customs"</span><span class="xml-tag">&gt;</span>
+  <span class="xml-tag">&lt;soapenv:Body&gt;</span>
+    <span class="xml-tag">&lt;cust:GetCustomsStatusResponse&gt;</span>
+      ${x('declarationNumber',d.declNo)}
+      ${x('clearanceStatus',d.status)}
+      ${x('dutyRate',d.dutyRate)}
+      ${x('dutyAmount',d.dutyAmt.toFixed(2))}
+      ${x('estimatedClearanceDate',d.clearDate)}
+      ${x('remarks',d.remarks)}
+    <span class="xml-tag">&lt;/cust:GetCustomsStatusResponse&gt;</span>
+  <span class="xml-tag">&lt;/soapenv:Body&gt;</span>
+<span class="xml-tag">&lt;/soapenv:Envelope&gt;</span>`;
+  return req+res;
+}
+
+// ── LIST + FILTER ────────────────────────────────────────────────────────────────────
+function renderList(shipments){
+  document.getElementById('shipment-count').textContent=shipments.length;
+  const ul=document.getElementById('shipment-list');
+  ul.innerHTML='';
+  shipments.forEach(s=>{
+    const li=document.createElement('li');
+    li.className='shipment-item'; li.dataset.id=s.id;
+    li.innerHTML=`<div class="s-id">${s.trackingNumber}</div>
+      <div class="s-route">${s.origin} → ${s.destination}</div>
+      <div class="s-desc">${s.description}</div>
+      <div class="s-footer">
+        <span class="status-badge status-${s.status}">${STATUS_LABELS[s.status]}</span>
+        <span class="eta">ETA: ${s.estimatedDelivery}</span>
+      </div>`;
+    li.addEventListener('click',()=>highlightShipment(s.id));
+    ul.appendChild(li);
+  });
+}
+
+function applyFilter(status){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.status===status));
+  allShipments.forEach(s=>removeShipment(s.id));
+  const filtered=status==='ALL'?allShipments:allShipments.filter(s=>s.status===status);
+  filtered.forEach(drawShipment);
+  renderList(filtered);
+  closeDrawer();
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  initMap();
+  document.querySelectorAll('.filter-btn').forEach(b=>b.addEventListener('click',()=>applyFilter(b.dataset.status)));
+  allShipments.forEach(drawShipment);
+  renderList(allShipments);
+});
+</script>
+</body>
+</html>
