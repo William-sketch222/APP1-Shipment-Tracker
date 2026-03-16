@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APP1 — Shipment Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<header>
+    <div class="header-inner">
+        <h1>&#128666; Global Shipment Tracker</h1>
+        <div class="legend">
+            <span class="dot in-transit"></span> In Transit
+            <span class="dot delivered"></span> Delivered
+            <span class="dot processing"></span> Processing
+        </div>
+    </div>
+</header>
+
+<div class="app-container">
+
+    <!-- LEFT: Shipment List -->
+    <aside id="sidebar">
+        <h2>Shipments <span id="shipment-count"></span></h2>
+        <div id="filter-bar">
+            <button class="filter-btn active" data-status="ALL">All</button>
+            <button class="filter-btn" data-status="IN_TRANSIT">In Transit</button>
+            <button class="filter-btn" data-status="DELIVERED">Delivered</button>
+            <button class="filter-btn" data-status="PROCESSING">Processing</button>
+        </div>
+        <ul id="shipment-list"></ul>
+    </aside>
+
+    <!-- RIGHT: Map -->
+    <main>
+        <div id="map"></div>
+    </main>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
